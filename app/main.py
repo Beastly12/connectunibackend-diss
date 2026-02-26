@@ -1,11 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from app.routers.auth import router as auth_router
+from app.dependencies.authDependencies import get_current_user
+from app.models import User
 
 app = FastAPI()
+app.include_router(auth_router)
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: str = None):
-    return {"item_id": item_id, "q": q}
+@app.get("/me")
+async def me(user: User = Depends(get_current_user)):
+    return {"id": user.id, "email": user.email}

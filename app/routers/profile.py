@@ -93,4 +93,4 @@ async def get_completion(
     current_user: User = Depends(get_current_user),
     service: ProfileService = Depends(get_profile_service),
 ):
-    return await service.get_completion(user_id=current_user.id)
+    return await  service.get_completion(user_id=current_user.id)

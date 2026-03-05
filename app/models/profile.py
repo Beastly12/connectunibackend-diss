@@ -20,6 +20,7 @@ class Profile(Base):
     )
 
     avatar_url: Mapped[str | None] = mapped_column(String(500))
+    avatar_public_id: Mapped[str | None] = mapped_column(String(500))
     headline: Mapped[str | None] = mapped_column(String(255))
     bio: Mapped[str | None] = mapped_column(Text)
 

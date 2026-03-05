@@ -15,3 +15,6 @@ python-multipart==0.0.12
 greenlet
 
 pydantic[email]
+
+cloudinary
+python-multipart

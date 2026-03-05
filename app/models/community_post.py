@@ -21,6 +21,8 @@ class CommunityPost(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str | None] = mapped_column(String(100))
+    image_url: Mapped[str | None] = mapped_column(String(500))
+    image_public_id: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

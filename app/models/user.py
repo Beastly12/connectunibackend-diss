@@ -19,6 +19,6 @@ class User(Base):
     roles = relationship("UserRoleMap", back_populates="user")
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False) # TODO: setup email verification logic and set default to false
 
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())  # Fixed: removed string quotes

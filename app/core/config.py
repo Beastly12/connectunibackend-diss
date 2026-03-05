@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_MINUTES: int = 15
     REFRESH_TOKEN_DAYS: int = 14
 
+    CLOUDINARY_CLOUD_NAME : str
+    CLOUDINARY_API_KEY : str
+    CLOUDINARY_API_SECRET : str
+
+
 
     @property
     def DATABASE_URL(self) -> str:

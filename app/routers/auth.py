@@ -2,6 +2,7 @@ from ast import List
 from typing import List as MappedList
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
@@ -14,9 +15,15 @@ from app.core.security import (
 )
 from app.models import User, RefreshToken
 from app.schemas.signup_dto import SignUpDto
+from app.schemas.token_response import TokenResponse
 from app.schemas.userResponse import UserResponse
+from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
+    return AuthService(db)
 
 
 @router.post("/register", status_code=201)
@@ -45,22 +52,24 @@ async def register(user: SignUpDto, db: AsyncSession = Depends(get_db)):
     return {"id": new_user.id, "email": new_user.email}
 
 
-@router.post("/login")
-async def login(email: str, password: str, db: AsyncSession = Depends(get_db)):
-    user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
-    if not user or not verify_password(password, user.password_hash):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
-
-    access = create_access_token(subject=user.email, user_id=user.id)
-
-    refresh_plain = create_refresh_token_plain()
-    refresh_hash = hash_refresh_token(refresh_plain)
-    expires = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_DAYS)
-
-    db.add(RefreshToken(user_id=user.id, token_hash=refresh_hash, expires_at=expires))
-    await db.commit()
-
-    return {"access_token": access, "refresh_token": refresh_plain, "token_type": "bearer"}
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Login with email and password",
+    responses={
+        401: {"description": "Invalid email or password"},
+        403: {"description": "Account inactive or unverified"},
+    }
+)
+async def login(
+        # OAuth2PasswordRequestForm gives you a standard form with username/password fields
+        # FastAPI's built-in /docs will render a proper login form for this
+        form_data: OAuth2PasswordRequestForm = Depends(),
+        service: AuthService = Depends(get_auth_service),
+):
+    # OAuth2PasswordRequestForm uses "username" field — we treat it as email
+    return await service.login(email=form_data.username, password=form_data.password)
 
 
 @router.post("/refresh")

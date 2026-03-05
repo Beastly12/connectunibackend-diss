@@ -19,6 +19,8 @@ class Community(Base):
     # Only populated when type == UNIVERSITY; matched against User.university to gate joining
     university: Mapped[str | None] = mapped_column(String(320))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    cover_image_url: Mapped[str | None] = mapped_column(String(500))
+    cover_image_public_id: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

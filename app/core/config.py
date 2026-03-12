@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY : str
     CLOUDINARY_API_SECRET : str
 
+    SMTP_HOST: str
+    SMTP_PORT: int
+    SMTP_USERNAME: str
+    SMTP_PASSWORD: str
+    EMAIL_FROM: str
+    APP_URL: str
+
 
 
     @property

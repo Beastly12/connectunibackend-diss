@@ -113,6 +113,15 @@ class ProfileService:
             "avatar_public_id": result["public_id"],
         })
 
+    async def delete_profile(self, user_id: int) -> None:
+        profile = await self.repo.get_by_user_id(user_id)
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found.",
+            )
+        await self.repo.delete(profile)
+
     # ------------------------------------------------------------------
     # Completion
     # ------------------------------------------------------------------
@@ -150,4 +159,5 @@ class ProfileService:
             percentage=total_percentage,
             missing_fields=missing_fields,
             completed_fields=completed_fields,
-        )
+        );
+

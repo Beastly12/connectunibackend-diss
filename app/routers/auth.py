@@ -15,11 +15,14 @@ from app.core.security import (
     create_refresh_token_plain,
     hash_refresh_token,
 )
+from app.dependencies.authDependencies import get_current_user
 from app.models import User, RefreshToken
 from app.schemas.signup_dto import SignUpDto
 from app.schemas.token_response import TokenResponse
 from app.schemas.userResponse import UserResponse
+from app.enums.verification_status import VerificationStatus
 from app.services.auth_service import AuthService
+from app.services.community_service import CommunityService
 from app.tasks.email_tasks import (
     send_welcome_email,
     send_verification_email,
@@ -53,6 +56,13 @@ async def register(user: SignUpDto, db: AsyncSession = Depends(get_db)):
     # Generate a secure random verification token
     verification_token = secrets.token_urlsafe(32)
 
+    # Professionals are self-declared at registration
+    initial_verification = (
+        VerificationStatus.SELF_DECLARED
+        if user.role == "PROFESSIONAL"
+        else VerificationStatus.UNVERIFIED
+    )
+
     new_user = User(
         email=user.email,
         full_name=user.full_name,
@@ -63,11 +73,18 @@ async def register(user: SignUpDto, db: AsyncSession = Depends(get_db)):
         password_hash=hash_password(user.password),
         is_verified=False,
         verification_token=verification_token,
+        verification_status=initial_verification,
     )
 
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+
+    # Auto-join global community
+    try:
+        await CommunityService(db).add_to_global_community(new_user.id)
+    except Exception:
+        pass
 
     # Send welcome + verification emails after successful DB commit
     first_name = new_user.full_name.split()[0]
@@ -105,10 +122,19 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     if user.is_verified:
         return {"message": "Email already verified. You can log in."}
 
+    # .ac.uk students are institutionally verified on email click
+    new_verification_status = user.verification_status
+    if user.email.lower().endswith(".ac.uk") and user.user_role == "STUDENT":
+        new_verification_status = VerificationStatus.VERIFIED
+
     await db.execute(
         update(User)
         .where(User.id == user.id)
-        .values(is_verified=True, verification_token=None)
+        .values(
+            is_verified=True,
+            verification_token=None,
+            verification_status=new_verification_status,
+        )
     )
     await db.commit()
 
@@ -134,6 +160,41 @@ async def login(
     service: AuthService = Depends(get_auth_service),
 ):
     return await service.login(email=form_data.username, password=form_data.password)
+
+# ---------------------------------------------------------------------------
+# Logout
+# ---------------------------------------------------------------------------
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(
+    refresh_token: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    token_hash = hash_refresh_token(refresh_token)
+    rt = (
+        await db.execute(
+            select(RefreshToken).where(
+                RefreshToken.token_hash == token_hash,
+                RefreshToken.user_id == current_user.id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not rt or rt.revoked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or already revoked token.",
+        )
+
+    await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.id == rt.id)
+        .values(revoked=True)
+    )
+    await db.commit()
+
+    return {"message": "Logged out successfully."}
+
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,8 @@
-from sqlalchemy import String, Boolean, DateTime, Integer, func
+from sqlalchemy import String, Boolean, DateTime, Integer, func, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.enums.verification_status import VerificationStatus
 
 
 class User(Base):
@@ -19,7 +20,13 @@ class User(Base):
     roles = relationship("UserRoleMap", back_populates="user")
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # ← False now
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    verification_status: Mapped[str] = mapped_column(
+        SAEnum(VerificationStatus, name="verification_status_enum", values_callable=lambda x: [e.value for e in x]),
+        default=VerificationStatus.UNVERIFIED,
+        server_default="unverified",
+        nullable=False,
+    )  # ← False now
     verification_token: Mapped[str | None] = mapped_column(String(500), nullable=True)  # ← new
     password_reset_token: Mapped[str | None] = mapped_column(String(500), nullable=True)  # ← new
     password_reset_expires: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # ← new

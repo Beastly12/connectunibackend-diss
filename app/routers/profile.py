@@ -93,4 +93,13 @@ async def get_completion(
     current_user: User = Depends(get_current_user),
     service: ProfileService = Depends(get_profile_service),
 ):
-    return await  service.get_completion(user_id=current_user.id)
+    return await service.get_completion(user_id=current_user.id)
+
+@router.delete(
+    "/me/completion",
+    response_model=ProfileCompletionResponse, summary="Delete profile completion percentage and missing fields", )
+async def delete_profile(
+    current_user: User = Depends(get_current_user),
+    service: ProfileService = Depends(get_profile_service),
+):
+    return await service.delete_profile(user_id=current_user.id)

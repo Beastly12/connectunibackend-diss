@@ -20,7 +20,7 @@ class Connection(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     status: Mapped[str] = mapped_column(
-        SAEnum(ConnectionStatus, name="connection_status_enum"),
+        SAEnum(ConnectionStatus, name="connection_status_enum", values_callable=lambda x: [e.value for e in x]),
         default=ConnectionStatus.PENDING,
         nullable=False,
     )

@@ -25,6 +25,11 @@ class ProfileRepository:
         await self.db.refresh(profile)
         return profile
 
+    async def delete(self, profile: Profile) -> None:
+        await self.db.delete(profile)
+        await self.db.commit()
+
+
     async def update(self, profile: Profile, data: dict) -> Profile:
         # Only set fields that were explicitly provided (partial update)
         for field, value in data.items():

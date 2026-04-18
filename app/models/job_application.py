@@ -22,7 +22,7 @@ class JobApplication(Base):
     cover_letter: Mapped[str | None] = mapped_column(Text)
     resume_url: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(
-        SAEnum(JobApplicationStatus, name="job_application_status_enum"),
+        SAEnum(JobApplicationStatus, name="job_application_status_enum", values_callable=lambda x: [e.value for e in x]),
         default=JobApplicationStatus.PENDING,
         nullable=False,
     )

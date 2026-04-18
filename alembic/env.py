@@ -6,7 +6,7 @@ from alembic import context
 
 from app.core.config import settings
 from app.core.database import Base
-from app.models import user, refresh_token  # ensure models are imported
+import app.models  # noqa: F401 — imports all models so Alembic sees every table
 
 config = context.config
 if config.config_file_name:

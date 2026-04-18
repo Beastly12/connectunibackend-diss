@@ -20,7 +20,7 @@ class Notification(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     type: Mapped[str] = mapped_column(
-        SAEnum(NotificationType, name="notification_type_enum"), nullable=False
+        SAEnum(NotificationType, name="notification_type_enum", values_callable=lambda x: [e.value for e in x]), nullable=False
     )
     # Stores the related entity's id (message_id, mentorship_id, post_id, etc.)
     reference_id: Mapped[int | None] = mapped_column(Integer)

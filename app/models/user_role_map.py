@@ -19,7 +19,7 @@ class UserRoleMap(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role: Mapped[str] = mapped_column(
-        SAEnum(UserRole, name="user_role_enum"), nullable=False
+        SAEnum(UserRole, name="user_role_enum", values_callable=lambda x: [e.value for e in x]), nullable=False
     )
 
     __table_args__ = (UniqueConstraint("user_id", "role", name="uq_user_role"),)

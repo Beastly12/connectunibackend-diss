@@ -21,7 +21,7 @@ class SignUpDto(BaseModel):
     @field_validator('role')
     @classmethod
     def valid_role(cls, v):
-        allowed = {'STUDENT', 'MENTOR', 'ALUMNI'}
+        allowed = {'STUDENT', 'MENTOR', 'ALUMNI', 'PROFESSIONAL'}
         if v.upper() not in allowed:
             raise ValueError(f'Role must be one of {allowed}')
         return v.upper()
@@ -47,5 +47,6 @@ class SignUpDto(BaseModel):
         elif role == 'ALUMNI':
             if year >= current_year:
                 raise ValueError(f'Alumni graduation year must be before {current_year}')
+        # PROFESSIONAL: any reasonable year accepted
 
         return self

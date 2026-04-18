@@ -22,7 +22,7 @@ cloudinary.config(
 # Magic bytes for each allowed MIME type
 # We read the first 12 bytes of the file and check against these signatures
 # This cannot be faked by renaming a file — it's the actual file content
-ALLOWED_MIME_SIGNATURES: dict[bytes, str] = {
+IMAGE_MIME_SIGNATURES: dict[bytes, str] = {
     b"\xff\xd8\xff": "image/jpeg",
     b"\x89PNG\r\n\x1a\n": "image/png",
     b"RIFF": "image/webp",   # WebP starts with RIFF....WEBP
@@ -30,23 +30,36 @@ ALLOWED_MIME_SIGNATURES: dict[bytes, str] = {
     b"GIF89a": "image/gif",
 }
 
+# Keep the original name for backwards-compat
+ALLOWED_MIME_SIGNATURES = IMAGE_MIME_SIGNATURES
+
+PDF_SIGNATURE = b"\x25\x50\x44\x46"  # %PDF
+
 # Max file sizes per image type (in bytes)
 SIZE_LIMITS: dict[str, int] = {
-    "avatar":        5 * 1024 * 1024,   # 5MB
-    "event_cover":   10 * 1024 * 1024,  # 10MB
-    "community_cover": 10 * 1024 * 1024, # 10MB
-    "post_image":    10 * 1024 * 1024,  # 10MB
-    "message_image": 10 * 1024 * 1024,  # 10MB
+    "avatar":              5 * 1024 * 1024,   # 5MB
+    "event_cover":         10 * 1024 * 1024,  # 10MB
+    "community_cover":     10 * 1024 * 1024,  # 10MB
+    "post_image":          10 * 1024 * 1024,  # 10MB
+    "message_image":       10 * 1024 * 1024,  # 10MB
+    # Document types (images + PDFs)
+    "document":            10 * 1024 * 1024,  # 10MB — used for alumni certificates
+    "request_attachment":  10 * 1024 * 1024,  # 10MB — used for mentorship request attachments
 }
 
 # Cloudinary folder per image type — keeps your media library organised
 FOLDERS: dict[str, str] = {
-    "avatar":          "connectuni/avatars",
-    "event_cover":     "connectuni/events",
-    "community_cover": "connectuni/communities",
-    "post_image":      "connectuni/posts",
-    "message_image":   "connectuni/messages",
+    "avatar":              "connectuni/avatars",
+    "event_cover":         "connectuni/events",
+    "community_cover":     "connectuni/communities",
+    "post_image":          "connectuni/posts",
+    "message_image":       "connectuni/messages",
+    "document":            "connectuni/documents",
+    "request_attachment":  "connectuni/request_attachments",
 }
+
+# Types that support both images and PDFs — use resource_type="auto" on Cloudinary
+DOCUMENT_TYPES: set[str] = {"document", "request_attachment"}
 
 
 
@@ -83,11 +96,19 @@ class ImageService:
             )
 
         # Step 3: Validate file type via magic bytes — cannot be faked
-        if not self._is_valid_image(contents):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed.",
-            )
+        is_document = image_type in DOCUMENT_TYPES
+        if is_document:
+            if not self._is_valid_image(contents) and not self._is_valid_pdf(contents):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid file type. Only JPEG, PNG, and PDF are allowed.",
+                )
+        else:
+            if not self._is_valid_image(contents):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed.",
+                )
 
         # Step 4: Delete old image from Cloudinary before uploading new one
         # This prevents orphaned files accumulating in your media library
@@ -95,11 +116,13 @@ class ImageService:
             await self.delete(old_public_id)
 
         # Step 5: Upload to Cloudinary
+        # Use resource_type="auto" for documents so PDFs and images both upload correctly
+        cloudinary_resource_type = "auto" if is_document else "image"
         try:
             result = cloudinary.uploader.upload(
                 contents,
                 folder=FOLDERS[image_type],
-                resource_type="image",
+                resource_type=cloudinary_resource_type,
                 # Cloudinary auto-generates a unique public_id within the folder
             )
         except Exception as e:
@@ -133,7 +156,7 @@ class ImageService:
         """
         header = contents[:12]
 
-        for signature, _ in ALLOWED_MIME_SIGNATURES.items():
+        for signature, _ in IMAGE_MIME_SIGNATURES.items():
             if header.startswith(signature):
                 return True
 
@@ -142,3 +165,7 @@ class ImageService:
             return True
 
         return False
+
+    def _is_valid_pdf(self, contents: bytes) -> bool:
+        """Check magic bytes to verify the file is a PDF (%PDF header)."""
+        return contents[:4] == PDF_SIGNATURE

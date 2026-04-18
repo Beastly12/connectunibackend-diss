@@ -20,7 +20,7 @@ class EventRegistration(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     status: Mapped[str] = mapped_column(
-        SAEnum(EventRegistrationStatus, name="event_registration_status_enum"),
+        SAEnum(EventRegistrationStatus, name="event_registration_status_enum", values_callable=lambda x: [e.value for e in x]),
         default=EventRegistrationStatus.REGISTERED,
         nullable=False,
     )

@@ -13,7 +13,7 @@ class EventBase(BaseModel):
     location: str = Field(..., min_length=2, max_length=500)
     event_date: datetime = Field(...)
     event_type: EventType = Field(...)
-    max_attendees: int | None = Field(default=None, ge=3)
+    max_attendees: int | None = Field(default=None, ge=10)
 
 
 # ------------------------------------------------------------------
@@ -33,8 +33,8 @@ class EventCreateDto(EventBase):
     @field_validator("max_attendees")
     @classmethod
     def max_attendees_must_be_positive(cls, v: int | None) -> int | None:
-        if v is not None and v < 3:
-            raise ValueError("max_attendees must be at least 3.")
+        if v is not None and v < 10:
+            raise ValueError("max_attendees must be at least 10.")
         return v
 
 
@@ -70,11 +70,19 @@ class OrganizerSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class EventResponse(EventBase):
+class EventResponse(BaseModel):
     id: int
     organizer_id: int
     organizer: OrganizerSummary
+    title: str
+    description: str
+    location: str
+    event_date: datetime
+    event_type: EventType
+    max_attendees: int | None
     is_active: bool
+    cover_image_url: str | None
+    cover_image_public_id: str | None
     created_at: datetime
     attendee_count: int = Field(default=0)
 

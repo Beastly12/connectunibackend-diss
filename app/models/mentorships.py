@@ -20,7 +20,7 @@ class Mentorship(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     status: Mapped[str] = mapped_column(
-        SAEnum(MentorshipStatus, name="mentorship_status_enum"),
+        SAEnum(MentorshipStatus, name="mentorship_status_enum", values_callable=lambda x: [e.value for e in x]),
         default=MentorshipStatus.PENDING,
         nullable=False,
     )

@@ -210,7 +210,12 @@ async def refresh(refresh_token: str, db: AsyncSession = Depends(get_db)):
 
     now = datetime.now(timezone.utc)
 
-    if not rt or rt.revoked or rt.expires_at <= now:
+    # SQLite returns naive datetimes even for timezone=True columns; normalise before comparing.
+    expires_at = rt.expires_at if rt is not None else None
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if not rt or rt.revoked or expires_at <= now:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token.")
 
     # Revoke used token (rotation — each refresh token can only be used once)

@@ -138,7 +138,11 @@ class EventService:
             )
 
         # Guard 2: cannot RSVP to a past event
-        if event.event_date <= datetime.now(timezone.utc):
+        # Normalise event_date: SQLite returns naive datetimes even for timezone=True columns.
+        event_date = event.event_date
+        if event_date.tzinfo is None:
+            event_date = event_date.replace(tzinfo=timezone.utc)
+        if event_date <= datetime.now(timezone.utc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot RSVP to an event that has already passed.",
@@ -179,7 +183,10 @@ class EventService:
     async def cancel_rsvp(self, event_id: int, user_id: int) -> None:
         event = await self.get_event_by_id(event_id)
 
-        if event.event_date <= datetime.now(timezone.utc):
+        event_date = event.event_date
+        if event_date.tzinfo is None:
+            event_date = event_date.replace(tzinfo=timezone.utc)
+        if event_date <= datetime.now(timezone.utc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot cancel registration for a past event.",

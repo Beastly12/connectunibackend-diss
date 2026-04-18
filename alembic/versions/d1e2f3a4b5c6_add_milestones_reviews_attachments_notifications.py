@@ -16,6 +16,7 @@ Changes:
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "d1e2f3a4b5c6"
@@ -46,7 +47,7 @@ def upgrade() -> None:
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum(
+            postgresql.ENUM(
                 "todo", "in_progress", "completed",
                 name="milestone_status_enum",
                 create_type=False,

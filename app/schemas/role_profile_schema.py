@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.enums.preferred_format import PreferredFormat
 from app.enums.verification_status import VerificationStatus
@@ -133,6 +133,19 @@ class FullProfileResponse(BaseModel):
     role: str
     verification_status: str
     is_verified: bool
+    # Base profile fields
+    avatar_url: str | None = None
+    headline: str | None = None
+    bio: str | None = None
+    university: str | None = None
+    major: str | None = None
+    graduation_year: int | None = None
+    skills: list[Any] | None = None
+    interests: list[Any] | None = None
+    goals: str | None = None
+    company: str | None = None
+    job_title: str | None = None
+    # Role-specific profiles
     student_profile: StudentProfileResponse | None = None
     alumni_profile: AlumniProfileResponse | None = None
     professional_profile: ProfessionalProfileResponse | None = None

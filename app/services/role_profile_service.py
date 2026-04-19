@@ -9,6 +9,9 @@ from app.models.mentorship_preference import MentorshipPreference
 from app.models.professional_profile import ProfessionalProfile
 from app.models.student_profile import StudentProfile
 from app.models.user import User
+from sqlalchemy import select
+
+from app.repositories.profile_repository import ProfileRepository
 from app.repositories.role_profile_repository import RoleProfileRepository
 from app.schemas.role_profile_schema import (
     AlumniProfileResponse,
@@ -129,7 +132,23 @@ class RoleProfileService:
     # ------------------------------------------------------------------
 
     async def get_full_profile(self, user: User) -> FullProfileResponse:
-        """Return the full profile including role-specific data and mentorship prefs."""
+        """Return the full profile for the authenticated user."""
+        return await self._build_full_profile(user)
+
+    async def get_full_profile_by_user_id(self, user_id: int) -> FullProfileResponse:
+        """Return the full profile for any user by ID (used for public profile lookups)."""
+        result = await self.repo.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found.",
+            )
+        return await self._build_full_profile(user)
+
+    async def _build_full_profile(self, user: User) -> FullProfileResponse:
+        """Assemble all profile data for a user into a single response."""
+        base = await ProfileRepository(self.repo.db).get_by_user_id(user.id)
         student = await self.repo.get_student_profile(user.id)
         alumni = await self.repo.get_alumni_profile(user.id)
         professional = await self.repo.get_professional_profile(user.id)
@@ -142,6 +161,17 @@ class RoleProfileService:
             role=user.user_role,
             verification_status=user.verification_status,
             is_verified=user.is_verified,
+            avatar_url=base.avatar_url if base else None,
+            headline=base.headline if base else None,
+            bio=base.bio if base else None,
+            university=base.university if base else None,
+            major=base.major if base else None,
+            graduation_year=base.graduation_year if base else None,
+            skills=base.skills if base else None,
+            interests=base.interests if base else None,
+            goals=base.goals if base else None,
+            company=base.company if base else None,
+            job_title=base.job_title if base else None,
             student_profile=StudentProfileResponse.model_validate(student) if student else None,
             alumni_profile=AlumniProfileResponse.model_validate(alumni) if alumni else None,
             professional_profile=ProfessionalProfileResponse.model_validate(professional) if professional else None,

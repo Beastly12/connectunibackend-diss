@@ -1,11 +1,15 @@
 """
 Tests for profile endpoints.
 
-POST   /profiles/
-GET    /profiles/me
-GET    /profiles/{user_id}
-PATCH  /profiles/me
-GET    /profiles/me/completion
+GET    /profiles/{user_id}       — full profile (public)
+PATCH  /profiles/me              — update base profile fields
+GET    /profiles/me/completion   — completion score
+DELETE /profiles/me              — delete profile
+
+GET  /profile/me                 — full profile (authenticated, canonical)
+POST /profile/student            — student role profile
+POST /profile/alumni             — alumni role profile
+POST /profile/professional       — professional role profile
 """
 import pytest
 from httpx import AsyncClient
@@ -25,90 +29,30 @@ def uniq(prefix: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Create
-# ---------------------------------------------------------------------------
-
-class TestCreateProfile:
-
-    async def test_create_profile_success(self, client: AsyncClient, db: AsyncSession):
-        """Creating a profile returns 201 with the profile data."""
-        user = await make_user(db, email=uniq("u"))
-        res = await client.post(
-            "/profiles/",
-            json={"headline": "Software Engineer", "bio": "Loves Python"},
-            headers=auth_headers(user),
-        )
-        assert res.status_code == 201
-        data = res.json()
-        assert data["user_id"] == user.id
-        assert data["headline"] == "Software Engineer"
-        assert data["bio"] == "Loves Python"
-
-    async def test_create_profile_minimal_payload(self, client: AsyncClient, db: AsyncSession):
-        """Creating a profile with no fields still succeeds (all optional)."""
-        user = await make_user(db, email=uniq("u"))
-        res = await client.post("/profiles/", json={}, headers=auth_headers(user))
-        assert res.status_code == 201
-        assert res.json()["user_id"] == user.id
-
-    async def test_create_duplicate_profile_returns_409(self, client: AsyncClient, db: AsyncSession):
-        """Creating a second profile for the same user returns 409."""
-        user = await make_user(db, email=uniq("u"))
-        await client.post("/profiles/", json={"headline": "First"}, headers=auth_headers(user))
-        res = await client.post("/profiles/", json={"headline": "Second"}, headers=auth_headers(user))
-        assert res.status_code == 409
-
-    async def test_create_profile_requires_auth(self, client: AsyncClient, db: AsyncSession):
-        """Unauthenticated request returns 401."""
-        res = await client.post("/profiles/", json={})
-        assert res.status_code == 401
-
-
-# ---------------------------------------------------------------------------
-# Read — /profiles/me
-# ---------------------------------------------------------------------------
-
-class TestGetMyProfile:
-
-    async def test_get_my_profile_success(self, client: AsyncClient, db: AsyncSession):
-        """Returns 200 with the user's profile."""
-        user = await make_user(db, email=uniq("u"))
-        await client.post("/profiles/", json={"bio": "My bio"}, headers=auth_headers(user))
-
-        res = await client.get("/profiles/me", headers=auth_headers(user))
-        assert res.status_code == 200
-        assert res.json()["bio"] == "My bio"
-
-    async def test_get_my_profile_not_found_returns_404(self, client: AsyncClient, db: AsyncSession):
-        """User without a profile gets 404."""
-        user = await make_user(db, email=uniq("u"))
-        res = await client.get("/profiles/me", headers=auth_headers(user))
-        assert res.status_code == 404
-
-    async def test_get_my_profile_requires_auth(self, client: AsyncClient, db: AsyncSession):
-        """Unauthenticated request returns 401."""
-        res = await client.get("/profiles/me")
-        assert res.status_code == 401
-
-
-# ---------------------------------------------------------------------------
-# Read — /profiles/{user_id} (public)
+# GET /profiles/{user_id} — public full profile
 # ---------------------------------------------------------------------------
 
 class TestGetProfileById:
 
     async def test_get_profile_by_id_success(self, client: AsyncClient, db: AsyncSession):
-        """Any user can retrieve another user's profile without auth."""
+        """Any user can retrieve another user's full profile without auth."""
         user = await make_user(db, email=uniq("u"))
-        await client.post(
-            "/profiles/",
+        # Seed some base profile data via PATCH so there's something to read back
+        await client.patch(
+            "/profiles/me",
             json={"headline": "Public profile"},
             headers=auth_headers(user),
         )
 
         res = await client.get(f"/profiles/{user.id}")
         assert res.status_code == 200
-        assert res.json()["headline"] == "Public profile"
+        data = res.json()
+        assert data["id"] == user.id
+        assert data["full_name"] == user.full_name
+        assert data["headline"] == "Public profile"
+        assert "avatar_url" in data
+        assert "role" in data
+        assert "verification_status" in data
 
     async def test_get_profile_by_id_not_found_returns_404(self, client: AsyncClient, db: AsyncSession):
         """Non-existent user_id returns 404."""
@@ -117,19 +61,14 @@ class TestGetProfileById:
 
 
 # ---------------------------------------------------------------------------
-# Update
+# PATCH /profiles/me — update base profile fields
 # ---------------------------------------------------------------------------
 
 class TestUpdateProfile:
 
     async def test_update_profile_success(self, client: AsyncClient, db: AsyncSession):
-        """PATCH updates the specified fields."""
+        """PATCH updates the specified fields and returns the updated profile."""
         user = await make_user(db, email=uniq("u"))
-        await client.post(
-            "/profiles/",
-            json={"headline": "Original headline"},
-            headers=auth_headers(user),
-        )
 
         res = await client.patch(
             "/profiles/me",
@@ -141,21 +80,20 @@ class TestUpdateProfile:
         assert data["headline"] == "Updated headline"
         assert data["bio"] == "New bio"
 
-    async def test_update_profile_not_found_returns_404(self, client: AsyncClient, db: AsyncSession):
-        """PATCH on a non-existent profile returns 404."""
+    async def test_update_profile_creates_if_not_exists(self, client: AsyncClient, db: AsyncSession):
+        """PATCH auto-creates the profile row if it doesn't exist yet."""
         user = await make_user(db, email=uniq("u"))
         res = await client.patch(
             "/profiles/me",
-            json={"headline": "No profile exists"},
+            json={"headline": "Auto created"},
             headers=auth_headers(user),
         )
-        assert res.status_code == 404
+        assert res.status_code == 200
+        assert res.json()["headline"] == "Auto created"
 
     async def test_update_profile_empty_string_returns_422(self, client: AsyncClient, db: AsyncSession):
         """Sending an empty string for a string field returns 422."""
         user = await make_user(db, email=uniq("u"))
-        await client.post("/profiles/", json={}, headers=auth_headers(user))
-
         res = await client.patch(
             "/profiles/me",
             json={"headline": ""},
@@ -170,7 +108,7 @@ class TestUpdateProfile:
 
 
 # ---------------------------------------------------------------------------
-# Completion
+# GET /profiles/me/completion
 # ---------------------------------------------------------------------------
 
 class TestProfileCompletion:
@@ -178,7 +116,6 @@ class TestProfileCompletion:
     async def test_get_completion_returns_structure(self, client: AsyncClient, db: AsyncSession):
         """Returns percentage, missing_fields, and completed_fields."""
         user = await make_user(db, email=uniq("u"))
-        await client.post("/profiles/", json={}, headers=auth_headers(user))
 
         res = await client.get("/profiles/me/completion", headers=auth_headers(user))
         assert res.status_code == 200
@@ -187,10 +124,9 @@ class TestProfileCompletion:
         assert "missing_fields" in data
         assert "completed_fields" in data
 
-    async def test_empty_profile_has_low_completion(self, client: AsyncClient, db: AsyncSession):
-        """A profile with no fields filled has 0% completion."""
+    async def test_empty_profile_has_zero_completion(self, client: AsyncClient, db: AsyncSession):
+        """A profile with no optional fields filled has 0% completion."""
         user = await make_user(db, email=uniq("u"))
-        await client.post("/profiles/", json={}, headers=auth_headers(user))
 
         res = await client.get("/profiles/me/completion", headers=auth_headers(user))
         assert res.json()["percentage"] == 0
@@ -198,8 +134,8 @@ class TestProfileCompletion:
     async def test_completion_increases_with_filled_fields(self, client: AsyncClient, db: AsyncSession):
         """Filling in headline and bio increases completion above 0."""
         user = await make_user(db, email=uniq("u"))
-        await client.post(
-            "/profiles/",
+        await client.patch(
+            "/profiles/me",
             json={"headline": "Engineer", "bio": "I build things"},
             headers=auth_headers(user),
         )
@@ -207,8 +143,44 @@ class TestProfileCompletion:
         res = await client.get("/profiles/me/completion", headers=auth_headers(user))
         assert res.json()["percentage"] > 0
 
-    async def test_completion_no_profile_returns_404(self, client: AsyncClient, db: AsyncSession):
-        """Requesting completion for a user with no profile returns 404."""
+    async def test_completion_requires_auth(self, client: AsyncClient, db: AsyncSession):
+        """Unauthenticated request returns 401."""
+        res = await client.get("/profiles/me/completion")
+        assert res.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /profile/me — canonical full profile (role_profile router)
+# ---------------------------------------------------------------------------
+
+class TestGetMyFullProfile:
+
+    async def test_returns_full_profile_with_base_fields(self, client: AsyncClient, db: AsyncSession):
+        """GET /profile/me returns the full profile including base profile fields."""
         user = await make_user(db, email=uniq("u"))
-        res = await client.get("/profiles/me/completion", headers=auth_headers(user))
-        assert res.status_code == 404
+        await client.patch(
+            "/profiles/me",
+            json={"headline": "My headline", "bio": "My bio"},
+            headers=auth_headers(user),
+        )
+
+        res = await client.get("/profile/me", headers=auth_headers(user))
+        assert res.status_code == 200
+        data = res.json()
+        assert data["id"] == user.id
+        assert data["email"] == user.email
+        assert data["full_name"] == user.full_name
+        assert data["headline"] == "My headline"
+        assert data["bio"] == "My bio"
+        assert "avatar_url" in data
+        assert "role" in data
+        assert "verification_status" in data
+        assert "student_profile" in data
+        assert "alumni_profile" in data
+        assert "professional_profile" in data
+        assert "mentorship_preferences" in data
+
+    async def test_requires_auth(self, client: AsyncClient, db: AsyncSession):
+        """Unauthenticated request returns 401."""
+        res = await client.get("/profile/me")
+        assert res.status_code == 401

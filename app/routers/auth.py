@@ -23,6 +23,7 @@ from app.schemas.userResponse import UserResponse
 from app.enums.verification_status import VerificationStatus
 from app.services.auth_service import AuthService
 from app.services.community_service import CommunityService
+from app.services.profile_service import ProfileService
 from app.tasks.email_tasks import (
     send_welcome_email,
     send_verification_email,
@@ -79,6 +80,12 @@ async def register(user: SignUpDto, db: AsyncSession = Depends(get_db)):
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+
+    # Auto-create an empty profile so all downstream endpoints work immediately
+    try:
+        await ProfileService(db).create_profile(user_id=new_user.id, data={})
+    except Exception:
+        pass
 
     # Auto-join global community
     try:

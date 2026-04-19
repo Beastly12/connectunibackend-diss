@@ -78,14 +78,10 @@ class ProfileService:
 
     async def update_profile(self, user_id: int, data: dict) -> Profile:
         profile = await self.repo.get_by_user_id(user_id)
-        if not profile:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Profile not found.",
-            )
-        # Strip out keys where the value was not provided (None means "not sent")
-        # so we don't accidentally overwrite existing data with None
         updates = {k: v for k, v in data.items() if v is not None}
+        if not profile:
+            # Auto-create if the profile row doesn't exist yet (e.g. legacy users)
+            return await self.repo.create(user_id=user_id, **updates)
         return await self.repo.update(profile, updates)
 
     # ------------------------------------------------------------------
@@ -94,20 +90,16 @@ class ProfileService:
 
     async def update_avatar(self, user_id: int, file: UploadFile) -> Profile:
         profile = await self.repo.get_by_user_id(user_id)
-        if not profile:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Profile not found.",
-            )
 
-        # Upload to Cloudinary — automatically deletes the old avatar if one exists
         result = await self.image_service.upload(
             file=file,
             image_type="avatar",
-            old_public_id=profile.avatar_public_id,
+            old_public_id=profile.avatar_public_id if profile else None,
         )
 
-        # Persist the new URL and public_id
+        if not profile:
+            return await self.repo.create(user_id=user_id, avatar_url=result["url"], avatar_public_id=result["public_id"])
+
         return await self.repo.update(profile, {
             "avatar_url": result["url"],
             "avatar_public_id": result["public_id"],
@@ -129,9 +121,10 @@ class ProfileService:
     async def get_completion(self, user_id: int) -> ProfileCompletionResponse:
         profile = await self.repo.get_by_user_id(user_id)
         if not profile:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Profile not found.",
+            return ProfileCompletionResponse(
+                percentage=0,
+                missing_fields=list(FIELD_LABELS.values()),
+                completed_fields=[],
             )
         return self._calculate_completion(profile)
 

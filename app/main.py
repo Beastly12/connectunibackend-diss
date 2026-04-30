@@ -16,6 +16,7 @@ from app.routers.community import router as community_router
 from app.routers.community_message import router as community_message_router
 from app.routers.banned_word import router as banned_word_router
 from app.routers.mentorship import router as mentorship_router
+from app.routers.mentor import router as mentor_router
 from app.routers.role_profile import router as role_profile_router
 from app.routers.dashboard import router as dashboard_router
 from app.services.community_service import CommunityService
@@ -56,6 +57,7 @@ app.include_router(community_router)
 app.include_router(community_message_router)
 app.include_router(banned_word_router)
 app.include_router(mentorship_router)
+app.include_router(mentor_router)
 app.include_router(role_profile_router)
 app.include_router(dashboard_router)
 

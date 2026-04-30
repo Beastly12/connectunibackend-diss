@@ -1,3 +1,4 @@
+import re
 from pydantic import BaseModel, Field, field_validator, model_validator, EmailStr
 from datetime import datetime
 
@@ -14,8 +15,8 @@ class SignUpDto(BaseModel):
     @field_validator('full_name')
     @classmethod
     def name_must_be_real(cls, v):
-        if not v.replace(' ', '').isalpha():
-            raise ValueError('Full name must only contain letters')
+        if not re.fullmatch(r"[A-Za-zÀ-ÖØ-öø-ÿ' -]+", v.strip()):
+            raise ValueError('Full name must only contain letters, spaces, hyphens, or apostrophes')
         return v.strip()
 
     @field_validator('role')

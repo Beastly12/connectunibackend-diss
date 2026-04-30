@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, UploadFile, status
@@ -35,6 +36,33 @@ class RoleProfileService:
         self.image_service = ImageService()
 
     # ------------------------------------------------------------------
+    # Guard
+    # ------------------------------------------------------------------
+
+    async def _assert_no_conflicting_role_profile(
+        self, user: User, intended_role: str
+    ) -> None:
+        """Raise 409 if the user already has a profile for a different role."""
+        student, alumni, professional = await asyncio.gather(
+            self.repo.get_student_profile(user.id),
+            self.repo.get_alumni_profile(user.id),
+            self.repo.get_professional_profile(user.id),
+        )
+
+        role_map = {
+            "student": student,
+            "alumni": alumni,
+            "professional": professional,
+        }
+
+        for role, profile in role_map.items():
+            if role != intended_role and profile is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"User already has a {role} profile. A user may only hold one role profile.",
+                )
+
+    # ------------------------------------------------------------------
     # Student profile
     # ------------------------------------------------------------------
 
@@ -42,6 +70,7 @@ class RoleProfileService:
         self, user: User, data: dict
     ) -> StudentProfile:
         """Create or update the student profile for the authenticated user."""
+        await self._assert_no_conflicting_role_profile(user, "student")
         profile = await self.repo.upsert_student_profile(user_id=user.id, **data)
         return profile
 
@@ -56,6 +85,8 @@ class RoleProfileService:
         certificate: UploadFile | None = None,
     ) -> AlumniProfile:
         """Create or update the alumni profile, handling optional certificate upload."""
+        await self._assert_no_conflicting_role_profile(user, "alumni")
+
         extra: dict = {}
 
         if certificate:
@@ -93,6 +124,8 @@ class RoleProfileService:
         self, user: User, data: dict
     ) -> ProfessionalProfile:
         """Create or update the professional profile and mark as self-declared."""
+        await self._assert_no_conflicting_role_profile(user, "professional")
+
         profile = await self.repo.upsert_professional_profile(user_id=user.id, **data)
 
         # Professionals are always self-declared
@@ -148,11 +181,13 @@ class RoleProfileService:
 
     async def _build_full_profile(self, user: User) -> FullProfileResponse:
         """Assemble all profile data for a user into a single response."""
-        base = await ProfileRepository(self.repo.db).get_by_user_id(user.id)
-        student = await self.repo.get_student_profile(user.id)
-        alumni = await self.repo.get_alumni_profile(user.id)
-        professional = await self.repo.get_professional_profile(user.id)
-        pref = await self.repo.get_mentorship_preference(user.id)
+        base, student, alumni, professional, pref = await asyncio.gather(
+            ProfileRepository(self.repo.db).get_by_user_id(user.id),
+            self.repo.get_student_profile(user.id),
+            self.repo.get_alumni_profile(user.id),
+            self.repo.get_professional_profile(user.id),
+            self.repo.get_mentorship_preference(user.id),
+        )
 
         return FullProfileResponse(
             id=user.id,

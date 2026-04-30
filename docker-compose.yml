@@ -12,6 +12,8 @@ services:
 
   api:
     build: .
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
     env_file: .env
     depends_on:
       - db

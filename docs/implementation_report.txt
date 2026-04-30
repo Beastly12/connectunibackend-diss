@@ -1,0 +1,343 @@
+ConnectUni Backend — Implementation Report
+==========================================
+
+
+OVERVIEW
+--------
+A FastAPI async backend for a university mentorship and community platform. Built with
+PostgreSQL + SQLAlchemy async (aiosqlite for tests), Cloudinary for media storage, SMTP
+email with HTML templates, JWT authentication with token rotation, and WebSockets for
+real-time features.
+
+
+AUTHENTICATION & SECURITY
+--------------------------
+Endpoints (/auth)
+
+  Method  Path                    Purpose
+  ------  ----                    -------
+  POST    /auth/register          Register new user (STUDENT / PROFESSIONAL / ALUMNI)
+  GET     /auth/verify-email      Verify email via token link
+  POST    /auth/login             Login -> access + refresh tokens
+  POST    /auth/logout            Revoke refresh token
+  POST    /auth/refresh           Issue new tokens (rotation — each refresh token single-use)
+  POST    /auth/forgot-password   Request password reset
+  POST    /auth/reset-password    Reset password with token
+  GET     /auth/users             Dev utility: paginated user list
+
+Key implementation details:
+- Argon2 password hashing
+- JWT access tokens (15-minute expiry) + refresh tokens (14-day, SHA256-hashed in DB)
+- Token rotation — refresh token is revoked and reissued on every use
+- .ac.uk student accounts are automatically set to VERIFIED status on email confirmation
+- Professionals marked SELF_DECLARED at registration
+- Password reset tokens expire after 30 minutes
+- Email-enumeration-safe forgot-password response (same message whether email exists or not)
+
+
+PROFILE SYSTEM
+--------------
+Endpoints (/profiles, /profile)
+
+  Method  Path                          Purpose
+  ------  ----                          -------
+  POST    /profiles/                    Create base profile
+  GET     /profiles/me                  Get own profile
+  GET     /profiles/{user_id}           Get any user's profile (public, no auth)
+  PATCH   /profiles/me                  Update profile fields
+  PUT     /profiles/me/avatar           Upload / replace avatar (Cloudinary)
+  GET     /profiles/me/completion       Completion % + list of missing fields
+  POST    /profile/student              Create / update student role profile
+  POST    /profile/alumni               Create / update alumni profile (with certificate upload)
+  POST    /profile/professional         Create / update professional profile
+  POST    /profile/mentorship/prefs     Set mentorship preferences
+  GET     /profile/me                   Full combined profile (all role data)
+  PUT     /profile/{user_id}/verify     Admin: update verification status
+
+Role-based profile models:
+- StudentProfile    — major, graduation year, interests
+- AlumniProfile     — course completed, graduation year, certificate URL
+- ProfessionalProfile — job title, company, years of experience, skills
+
+Verification status flow:
+  UNVERIFIED -> (email click for .ac.uk) -> VERIFIED
+             -> (admin action)           -> VERIFIED / PENDING
+
+
+EVENT SYSTEM
+------------
+Endpoints (/events)
+
+  Method  Path                    Purpose
+  ------  ----                    -------
+  GET     /events/                Upcoming events (filterable by type)
+  GET     /events/past            Past events
+  GET     /events/rsvps           Current user's RSVPs
+  GET     /events/{id}            Single event detail
+  POST    /events/                Create event (multipart, optional cover image)
+  PATCH   /events/{id}            Update event (organiser only)
+  PUT     /events/{id}/cover-image Upload / replace cover image
+  POST    /events/{id}/rsvp       RSVP (sends confirmation email in background)
+  DELETE  /events/{id}/rsvp       Cancel RSVP
+
+Guards:
+- Organiser cannot RSVP to their own event
+- Cannot RSVP to a past event
+- Cannot create two events on the same date (409)
+- Duplicate RSVP blocked with SELECT FOR UPDATE (race-condition safe, 409)
+- Capacity limit enforced atomically in the repository
+
+
+MENTORSHIP SYSTEM
+-----------------
+The core feature of the platform — a full lifecycle mentorship management system.
+
+Mentor Profiles
+
+  Method  Path                              Purpose
+  ------  ----                              -------
+  POST    /mentorship/become-mentor         Create mentor profile
+  GET     /mentorship/mentor-profile/me     Own mentor profile
+  PATCH   /mentorship/mentor-profile/me     Update mentor profile
+  DELETE  /mentorship/mentor-profile/me     Deactivate
+  GET     /mentorship/mentors               Browse mentors (with match %)
+  GET     /mentorship/mentors/{user_id}     Public mentor profile
+
+Requests
+
+  Method  Path                                  Purpose
+  ------  ----                                  -------
+  POST    /mentorship/requests                  Send request (optional file attachment)
+  GET     /mentorship/requests/incoming         Pending requests (mentor view)
+  GET     /mentorship/requests/outgoing         Sent requests (mentee view)
+  PATCH   /mentorship/requests/{id}/accept      Accept request
+  PATCH   /mentorship/requests/{id}/reject      Reject request
+  DELETE  /mentorship/requests/{id}             Cancel request
+
+Relationships
+
+  Method  Path                                      Purpose
+  ------  ----                                      -------
+  GET     /mentorship/relationships/my-mentees      List mentees with progress
+  GET     /mentorship/relationships/my-mentors      List mentors with progress
+  GET     /mentorship/relationships/{id}            Relationship detail
+  PATCH   /mentorship/relationships/{id}/end        End relationship
+
+Sessions
+
+  Method  Path                                              Purpose
+  ------  ----                                              -------
+  POST    /mentorship/relationships/{id}/sessions           Schedule a session
+  GET     /mentorship/relationships/{id}/sessions           List sessions
+  PATCH   /mentorship/relationships/{id}/sessions/{sid}     Update session status
+
+Resources, Milestones, Reviews
+
+  Method    Path                                      Purpose
+  ------    ----                                      -------
+  POST/GET  /mentorship/relationships/{id}/resources  Share / list resources
+  POST/GET  /mentorship/relationships/{id}/milestones Create / list milestones (mentor only creates)
+  PUT/DEL   /mentorship/milestones/{id}               Update / delete milestone
+  POST      /mentorship/relationships/{id}/review      Leave review (mentee only, one per relationship)
+  GET       /mentorship/mentors/{user_id}/reviews      Public reviews for a mentor
+  GET       /mentorship/mentors/{user_id}/rating       Average rating
+  GET       /mentorship/stats/me                       Stats (both mentor and mentee perspectives)
+
+Match percentage algorithm — calculates compatibility between mentor and mentee based on
+overlapping skills, goals, preferred format, and availability.
+
+Rich list responses — mentor/mentee lists include progress percentage, next upcoming
+session, and milestone summary.
+
+
+COMMUNITY SYSTEM
+----------------
+Endpoints (/communities)
+
+  Method  Path                                      Purpose
+  ------  ----                                      -------
+  POST    /communities                              Create community
+  GET     /communities                              Communities accessible to user
+  GET     /communities/me                           Own communities
+  GET     /communities/{id}                         Community detail
+  PATCH   /communities/{id}                         Update (admin/moderator)
+  DELETE  /communities/{id}                         Delete
+  POST    /communities/{id}/join                    Join
+  DELETE  /communities/{id}/leave                   Leave
+  GET     /communities/{id}/members                 Member list
+  PATCH   /communities/{id}/members/{uid}/role      Change member role
+  DELETE  /communities/{id}/members/{uid}           Remove member
+  POST    /communities/{id}/invites                 Generate invite token
+  POST    /communities/join-via-invite/{token}      Join via invite link
+  WS      /communities/{id}/ws?token=               Real-time group chat
+
+Community messages (/communities/{id}/messages)
+
+  Method  Path              Purpose
+  ------  ----              -------
+  GET     messages          Paginated message history
+  POST    messages          Send message (with optional file attachment)
+  POST    messages/{id}/reactions  Toggle emoji reaction
+
+Community types: Global, University, Professional, Interest-Based, Study Group
+Member roles: MEMBER, MODERATOR, ADMIN (role-based permission checks throughout)
+Global community — auto-created; every new user is auto-joined on registration
+
+
+NOTIFICATIONS
+-------------
+Endpoints (/notifications)
+
+  Method  Path                        Purpose
+  ------  ----                        -------
+  GET     /notifications              Paginated notification list
+  GET     /notifications/unread-count Badge count
+  GET     /notifications/{id}         Single notification
+  PATCH   /notifications/read-all     Mark all read
+  PATCH   /notifications/{id}/read    Mark one read
+  DELETE  /notifications              Delete all
+  WS      /notifications/ws?token=    Real-time push
+
+20 notification types covering: mentorship requests/accept/reject/cancel,
+session/milestone/resource events, community messages, connection requests,
+post likes/comments, relationship ended, etc.
+
+
+ACTIVITY FEED
+-------------
+  Method  Path                      Purpose
+  ------  ----                      -------
+  GET     /activity/me              Recent activity (paginated with ?limit=)
+  GET     /activity/me/{type}       Filtered by activity type
+
+
+REAL-TIME (WEBSOCKETS)
+----------------------
+Two WebSocket channels:
+
+- /notifications/ws?token=<JWT>
+  Personal notification stream per user. Verifies JWT on connect, broadcasts to that
+  user's active connections, handles client pings.
+
+- /communities/{id}/ws?token=<JWT>
+  Community chat room. Verifies membership before allowing connection, broadcasts to all
+  members in the room, handles connection pooling.
+
+
+FILE UPLOADS (CLOUDINARY)
+-------------------------
+All file handling goes through ImageService with:
+- Magic-byte signature validation (not just MIME type)
+- Size limits by context: avatars 5 MB, all others 10 MB
+- Organised cloud folders by upload type
+- Old file deletion on replace
+
+Upload contexts supported:
+- User avatars
+- Event cover images
+- Community cover images
+- Community message attachments
+- Alumni certificates
+- Mentorship request attachments
+
+
+EMAIL SYSTEM
+------------
+HTML email templates (16 KB template file) covering:
+
+- Welcome + email verification on registration
+- Password reset
+- RSVP confirmation
+- Mentorship: request received, accepted, rejected, cancelled, relationship ended
+- Milestone completed
+- Session cancelled
+- Resource shared
+- Certificate received, verification status updated, preferences saved
+
+All emails sent via FastAPI BackgroundTasks (non-blocking — no user-facing latency).
+
+
+ADMIN / MODERATION
+------------------
+  Method  Path                      Purpose
+  ------  ----                      -------
+  GET     /admin/banned-words        List banned words
+  POST    /admin/banned-words        Add word
+  DELETE  /admin/banned-words/{word} Remove word
+
+
+INFRASTRUCTURE
+--------------
+Database
+- PostgreSQL 16 (production) via asyncpg
+- SQLite + aiosqlite for tests (in-memory, session-scoped)
+- Connection pool: pool_size=20, max_overflow=20
+
+Docker Compose
+- db       — PostgreSQL 16
+- api      — FastAPI + Uvicorn (volume-mounted for dev)
+- pgadmin  — PgAdmin on port 5050 (credentials from .env)
+
+CI/CD (GitHub Actions)
+- Triggers on push to main
+- SSH into EC2 via appleboy/ssh-action
+- git reset --hard origin/main -> docker compose up --build -d -> alembic upgrade head -> restart
+
+CORS
+- CloudFront CDN domain + localhost:5173 (Vite dev server)
+
+
+DATABASE MIGRATIONS (ALEMBIC)
+-----------------------------
+  Migration ID      Description
+  ------------      -----------
+  282792a203f2      Users, profiles, events, communities, connections base schema
+  699f0eec7da0      Verification + password reset token fields
+  52c1c77c3a72      Mentorship tables (requests, relationships, sessions, resources, preferences)
+  b7e3f9a2c1d4      Community roles, invites, messaging, reactions, banned words
+  a1b2c3d4e5f6      Student / Alumni / Professional role profiles, verification enums
+  d1e2f3a4b5c6      Milestones, reviews, message attachments, notifications
+  6982f0c59fb6      Activity tracking table
+  e1f2a3b4c5d6      Fix community_type_enum from uppercase to lowercase (production hotfix)
+
+
+TEST SUITE
+----------
+177 tests across 14 test modules — all passing
+
+  File                              Tests  Coverage
+  ----                              -----  --------
+  test_community.py                 29     CRUD, membership, invites, roles
+  test_auth.py                      25     Register, login, logout, refresh, verify, password reset
+  test_community_messages.py        18     Send, retrieve, attachments, reactions
+  test_role_profiles.py             20     Student/Alumni/Professional, verification
+  test_profile.py                   17     CRUD, completion, avatar
+  test_events.py                    20     CRUD, RSVP, cancel, listing
+  test_milestones.py                11     Create, update, delete, completion
+  test_notifications.py             10     CRUD, mark read, delete
+  test_match_percentage.py          9      Mentor discovery matching algorithm
+  test_reviews.py                   7      Creation, ratings, duplicates
+  test_dashboard_stats.py           7      Stats aggregation
+  test_activity.py                  8      Feed queries, type filtering
+  test_mentorship_notifications.py  6      Request/accept/reject/cancel notifications
+
+Infrastructure patterns used in tests:
+- conftest.py — shared in-memory SQLite engine (session-scoped), per-test DB session
+  (function-scoped), make_user helper, auth_headers JWT helper
+- unittest.mock.patch for Cloudinary + SMTP calls
+- Direct DB seeding for state setup (no API round-trips where not needed)
+
+
+SCALE SUMMARY
+-------------
+  Category            Count
+  --------            -----
+  API routers         11
+  Endpoints           ~110
+  Database models     38
+  Services            18
+  Repositories        10
+  Enums               17
+  Active migrations   8
+  Test files          14
+  Test functions      177

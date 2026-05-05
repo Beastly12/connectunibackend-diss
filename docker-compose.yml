@@ -1,37 +1,9 @@
 services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
   api:
     build: .
-    environment:
-      PYTHONDONTWRITEBYTECODE: "1"
     env_file: .env
-    depends_on:
-      - db
     ports:
       - "8000:8000"
     volumes:
       - .:/app
-
-  pgadmin:
-    image: dpage/pgadmin4
-    env_file: .env
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
-    ports:
-      - "5050:80"
-    depends_on:
-      - db
-
-volumes:
-  pgdata:
+    restart: unless-stopped

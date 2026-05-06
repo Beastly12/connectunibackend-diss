@@ -117,14 +117,14 @@ class EventRepository:
             # Guard 4: check capacity (locked)
             if max_attendees is not None:
                 count_result = await self.db.execute(
-                    select(func.count(EventRegistration.id))
+                    select(EventRegistration.id)
                     .where(
                         EventRegistration.event_id == event_id,
                         EventRegistration.status == EventRegistrationStatus.REGISTERED,
                     )
                     .with_for_update()
                 )
-                if count_result.scalar() >= max_attendees:
+                if len(count_result.scalars().all()) >= max_attendees:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="This event is fully booked.",

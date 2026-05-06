@@ -328,9 +328,9 @@ POSTGRES_HOST=db
 POSTGRES_PORT=5432
 POSTGRES_DB=authdb
 POSTGRES_USER=authuser
-POSTGRES_PASSWORD=authpass
+POSTGRES_PASSWORD=<generate-a-strong-local-password>
 
-JWT_SECRET=<secure-random-string>
+JWT_SECRET=<generate-with-openssl-rand-base64-48>
 JWT_ALG=HS256
 ACCESS_TOKEN_MINUTES=15
 REFRESH_TOKEN_DAYS=14

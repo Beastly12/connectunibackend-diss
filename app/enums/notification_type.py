@@ -9,6 +9,7 @@ class NotificationType(str, enum.Enum):
     CONNECTION_REQUEST = "connection_request"
     CONNECTION_ACCEPTED = "connection_accepted"
     EVENT_REMINDER = "event_reminder"
+    EVENT_RSVP = "event_rsvp"
     POST_LIKE = "post_like"
     POST_COMMENT = "post_comment"
     JOB_APPLICATION = "job_application"

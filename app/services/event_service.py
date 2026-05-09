@@ -3,11 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 from typing import Optional
 
+from app.enums.notification_type import NotificationType
 from app.models.event import Event
 from app.models.event_registration import EventRegistration
 from app.repositories.event_repository import EventRepository
 from app.services.activity_service import ActivityService
 from app.services.image_service import ImageService
+from app.services.notification_service import NotificationService
 from app.tasks.email_tasks import send_rsvp_confirmation_email
 
 
@@ -16,6 +18,7 @@ class EventService:
     def __init__(self, db: AsyncSession):
         self.repo = EventRepository(db)
         self.activity = ActivityService(db)
+        self.notifications = NotificationService(db)
         self.image_service = ImageService()
 
     # ------------------------------------------------------------------
@@ -156,6 +159,18 @@ class EventService:
             user_id=user_id,
             max_attendees=event.max_attendees,
         )
+
+        # Notify the event organiser
+        try:
+            if event.organizer_id != user_id:
+                await self.notifications.send(
+                    recipient_id=event.organizer_id,
+                    notification_type=NotificationType.EVENT_RSVP,
+                    sender_id=user_id,
+                    reference_id=event_id,
+                )
+        except Exception:
+            pass
 
         # Schedule side effects after response is sent — no user-facing latency
         background_tasks.add_task(

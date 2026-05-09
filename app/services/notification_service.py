@@ -33,6 +33,7 @@ def _build_body(
         NotificationType.POST_LIKE:          f"{name} liked your post",
         NotificationType.POST_COMMENT:       f"{name} commented on your post",
         NotificationType.EVENT_REMINDER:     "You have an upcoming event",
+        NotificationType.EVENT_RSVP:         f"{name} RSVP'd to your event",
         NotificationType.JOB_APPLICATION:    f"{name} applied to your job posting",
         NotificationType.MESSAGE:            f"{name} sent you a message",
         NotificationType.MESSAGE_REACTION:   f"{name} reacted to your message{community}",

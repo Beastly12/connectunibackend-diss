@@ -19,6 +19,10 @@ from app.routers.mentorship import router as mentorship_router
 from app.routers.mentor import router as mentor_router
 from app.routers.role_profile import router as role_profile_router
 from app.routers.dashboard import router as dashboard_router
+from app.routers.connection import router as connection_router
+from app.routers.post import router as post_router
+from app.routers.job import router as job_router
+from app.routers.direct_message import router as direct_message_router
 from app.services.community_service import CommunityService
 
 
@@ -60,6 +64,10 @@ app.include_router(mentorship_router)
 app.include_router(mentor_router)
 app.include_router(role_profile_router)
 app.include_router(dashboard_router)
+app.include_router(connection_router)
+app.include_router(post_router)
+app.include_router(job_router)
+app.include_router(direct_message_router)
 
 
 @app.get("/me")

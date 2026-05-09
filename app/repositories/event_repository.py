@@ -139,7 +139,10 @@ class EventRepository:
             self.db.add(registration)
             await self.db.flush()
             await self.db.refresh(registration)
-            return registration
+
+        await self.db.commit()
+        await self.db.refresh(registration)
+        return registration
 
     async def create_registration(self, event_id: int, user_id: int) -> EventRegistration:
         registration = EventRegistration(

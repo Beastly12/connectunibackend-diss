@@ -62,16 +62,16 @@ class ConnectionService:
         except Exception:
             pass
         try:
-            requester_name = conn.requester.full_name if conn.requester else "someone"
-            receiver_name = conn.receiver.full_name if conn.receiver else "someone"
+            requester_name = updated.requester.full_name if updated.requester else "someone"
+            receiver_name = updated.receiver.full_name if updated.receiver else "someone"
             await self.activity.log_connected(
-                user_id=conn.requester_id,
+                user_id=updated.requester_id,
                 connected_user_id=current_user_id,
                 connected_user_name=receiver_name,
             )
             await self.activity.log_connected(
                 user_id=current_user_id,
-                connected_user_id=conn.requester_id,
+                connected_user_id=updated.requester_id,
                 connected_user_name=requester_name,
             )
         except Exception:

@@ -189,8 +189,8 @@ class MentorshipRepository:
         result = await self.db.execute(
             select(MentorshipRelationship)
             .options(
-                joinedload(MentorshipRelationship.mentor),
-                joinedload(MentorshipRelationship.mentee),
+                joinedload(MentorshipRelationship.mentor).joinedload(User.profile),
+                joinedload(MentorshipRelationship.mentee).joinedload(User.profile),
             )
             .where(
                 MentorshipRelationship.mentor_id == mentor_id,
@@ -203,8 +203,8 @@ class MentorshipRepository:
         result = await self.db.execute(
             select(MentorshipRelationship)
             .options(
-                joinedload(MentorshipRelationship.mentor),
-                joinedload(MentorshipRelationship.mentee),
+                joinedload(MentorshipRelationship.mentor).joinedload(User.profile),
+                joinedload(MentorshipRelationship.mentee).joinedload(User.profile),
             )
             .where(
                 MentorshipRelationship.mentee_id == mentee_id,

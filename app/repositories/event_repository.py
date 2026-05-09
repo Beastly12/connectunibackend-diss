@@ -22,8 +22,7 @@ class EventRepository:
         event = Event(organizer_id=organizer_id, **data)
         self.db.add(event)
         await self.db.commit()
-        await self.db.refresh(event)
-        return event
+        return await self.get_by_id(event.id)
 
     async def get_by_id(self, event_id: int) -> Event | None:
         result = await self.db.execute(
@@ -80,8 +79,7 @@ class EventRepository:
         for field, value in data.items():
             setattr(event, field, value)
         await self.db.commit()
-        await self.db.refresh(event)
-        return event
+        return await self.get_by_id(event.id)
 
     # ------------------------------------------------------------------
     # Registrations
@@ -137,11 +135,10 @@ class EventRepository:
                 status=EventRegistrationStatus.REGISTERED,
             )
             self.db.add(registration)
-            await self.db.flush()
-            await self.db.refresh(registration)
+            await self.db.flush()  # populates registration.id
 
         await self.db.commit()
-        await self.db.refresh(registration)
+        await self.db.refresh(registration)  # loads server-side defaults (registered_at)
         return registration
 
     async def create_registration(self, event_id: int, user_id: int) -> EventRegistration:

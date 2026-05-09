@@ -47,8 +47,7 @@ class ConnectionRepository:
     async def update_status(self, connection: Connection, new_status: ConnectionStatus) -> Connection:
         connection.status = new_status
         await self.db.commit()
-        await self.db.refresh(connection)
-        return connection
+        return await self.get_by_id(connection.id)
 
     async def delete(self, connection: Connection) -> None:
         await self.db.delete(connection)

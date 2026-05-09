@@ -22,8 +22,7 @@ class ProfileRepository:
         profile = Profile(user_id=user_id, **data)
         self.db.add(profile)
         await self.db.commit()
-        await self.db.refresh(profile)
-        return profile
+        return await self.get_by_user_id(user_id)
 
     async def delete(self, profile: Profile) -> None:
         await self.db.delete(profile)
@@ -35,5 +34,4 @@ class ProfileRepository:
         for field, value in data.items():
             setattr(profile, field, value)
         await self.db.commit()
-        await self.db.refresh(profile)
-        return profile
+        return await self.get_by_user_id(profile.user_id)

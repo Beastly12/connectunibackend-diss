@@ -36,31 +36,18 @@ _NEW_VALUES = ["event_rsvp"]
 
 
 def upgrade():
-    # Step 1: add lowercase counterparts for all uppercase originals
+    # Only ADD VALUE here. PostgreSQL requires ADD VALUE to be committed
+    # before the new values can be used in DML — they cannot coexist in
+    # the same transaction. The data UPDATE is in the next migration.
     for _, lc in _RENAMES:
         op.execute(
             f"ALTER TYPE notification_type_enum ADD VALUE IF NOT EXISTS '{lc}'"
         )
-
-    # Step 2: add completely new values
     for val in _NEW_VALUES:
         op.execute(
             f"ALTER TYPE notification_type_enum ADD VALUE IF NOT EXISTS '{val}'"
         )
 
-    # Step 3: migrate existing rows from uppercase to lowercase
-    # ALTER TYPE ADD VALUE commits implicitly; subsequent DML is safe.
-    for uc, lc in _RENAMES:
-        op.execute(
-            f"UPDATE notifications SET type = '{lc}' WHERE type = '{uc}'"
-        )
-
 
 def downgrade():
-    # PostgreSQL does not support removing enum values — downgrade is a no-op
-    # for the enum changes. Data migration back to uppercase is omitted
-    # because the uppercase values are still present in the enum.
-    for uc, lc in _RENAMES:
-        op.execute(
-            f"UPDATE notifications SET type = '{uc}' WHERE type = '{lc}'"
-        )
+    pass  # PostgreSQL does not support removing enum values
